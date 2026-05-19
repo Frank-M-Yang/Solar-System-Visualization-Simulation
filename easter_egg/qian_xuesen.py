@@ -1,60 +1,55 @@
 """
 qian_xuesen.py
-Manages the Qian Xuesen easter egg in the main simulation.
 
-When the user presses R, this spawns lunar_window.py as a separate
-subprocess — giving it its own pygame window and event loop,
-completely independent from the main solar system simulation.
+Launcher for the Qian Xuesen solar-return easter egg.
 
-The main simulation keeps running in the background while the
-lunar window is open.
+The main simulation calls QianXuesenMission.launch when the user presses R.
+The launcher starts solar_return_window.py in a separate Python process so the
+easter egg has its own pygame window and event loop.
 """
 
-import sys
 import os
 import subprocess
+import sys
+
 import pygame
 
 
 class QianXuesenMission:
     """
-    Handles the R-key trigger in the main simulation.
-    Spawns the lunar challenge window as a child process.
+    Manage the R-key easter egg trigger.
 
     Attributes:
-        _proc      (subprocess.Popen | None): Handle to the child process
-        _cooldown  (int): Frame counter to prevent rapid re-spawning
+        _proc: Child process handle for the easter egg window.
+        _cooldown: Frame countdown that prevents rapid repeated launches.
     """
 
-    COOLDOWN_FRAMES = 120   # 2 seconds at 60fps before R can be pressed again
+    COOLDOWN_FRAMES = 120
 
     def __init__(self):
-        self._proc     = None
+        """
+        Create an idle mission launcher.
+        """
+        self._proc = None
         self._cooldown = 0
-
-    # ------------------------------------------------------------------
-    # Called from Simulation.handle_events() on K_r
-    # ------------------------------------------------------------------
 
     def launch(self):
         """
-        Spawn the lunar challenge window as a subprocess.
-        Only one instance at a time; ignored if already running.
+        Start the solar-return demonstration window if it is not already open.
+
+        The function ignores repeated launch requests during the cooldown and
+        while the child process is still running.
         """
         if self._cooldown > 0:
             return
 
-        # if a previous window is still open, don't open another
         if self._proc is not None and self._proc.poll() is None:
             return
 
-        # path to lunar_window.py (relative to this file's directory)
         window_script = os.path.join(
             os.path.dirname(os.path.abspath(__file__)),
-            "lunar_window.py"
+            "solar_return_window.py",
         )
-
-        # project root (one level above easter_egg/)
         project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
         self._proc = subprocess.Popen(
@@ -62,31 +57,34 @@ class QianXuesenMission:
             cwd=project_root,
         )
         self._cooldown = self.COOLDOWN_FRAMES
-        print("[Easter Egg] Qian Xuesen window launched.")
-
-    # ------------------------------------------------------------------
-    # Called every frame from Simulation._update()
-    # ------------------------------------------------------------------
+        print("[Easter Egg] Qian Xuesen solar-return window launched.")
 
     def update(self, screen_width: int = 0, screen_height: int = 0):
-        """Tick down the cooldown counter each frame."""
+        """
+        Advance launcher state by one frame.
+
+        Args:
+            screen_width: Unused placeholder kept for interface stability.
+            screen_height: Unused placeholder kept for interface stability.
+        """
         if self._cooldown > 0:
             self._cooldown -= 1
 
-    # ------------------------------------------------------------------
-    # Draw the R-key hint in the main simulation HUD
-    # ------------------------------------------------------------------
-
     def draw(self, screen: pygame.Surface):
-        """Show a small hint in the corner of the main window."""
+        """
+        Draw a small English hint in the main simulation window.
+
+        Args:
+            screen: Active pygame surface.
+        """
         font = pygame.font.SysFont("Arial", 12)
 
         active = self._proc is not None and self._proc.poll() is None
         if active:
-            text  = "Qian Xuesen window is open  (press R again to reopen)"
+            text = "Qian Xuesen solar-return window is open"
             color = (80, 180, 80)
         else:
-            text  = "Press R — Qian Xuesen's Lunar Challenge  (钱学森月球挑战)"
+            text = "Press R - Qian Xuesen's Solar Return Challenge"
             color = (130, 130, 130)
 
         hint = font.render(text, True, color)

@@ -1,141 +1,115 @@
 """
 physics_engine.py
 
-Computes gravitational interactions between all celestial bodies
-and advances their positions by one time step.
+Newtonian gravity engine for the main solar system simulation.
 
-Integration method: Symplectic (Semi-implicit) Euler
-  - Update velocity first using acceleration
-  - Then update position using the NEW velocity
-  This keeps energy approximately conserved over long simulations,
-  preventing orbits from slowly spiralling in or out.
+The engine computes pairwise gravitational acceleration between registered
+CelestialBody instances and advances each movable body with symplectic Euler
+integration:
 
-Key formula:
-  F  = G * m1 * m2 / r²          (Newton's law of gravitation)
-  a  = F / m                      (Newton's second law)
-  v  += a * dt                    (velocity update)
-  x  += v * dt                    (position update, using new v)
+    acceleration = G * other_mass / distance_squared
+    velocity = velocity + acceleration * dt
+    position = position + velocity * dt
+
+The implementation first computes all accelerations from the same snapshot of
+positions, then applies movement. That avoids order-dependent behavior.
 """
 
 import math
-from core.celestial_body import CelestialBody
-from core.star           import Star
+
 import config
+from core.celestial_body import CelestialBody
+from core.star import Star
 
 
 class PhysicsEngine:
     """
-    Manages all celestial bodies and steps the simulation forward.
+    Manage bodies and advance them through gravitational interaction.
 
     Attributes:
-        G       (float): Gravitational constant, scaled for the simulation.
-                         Real value is 6.674e-11 N·m²/kg² but we use a
-                         scaled version so the simulation fits on screen.
-        bodies  (list):  All CelestialBody instances in the simulation.
-        dt      (float): Base time step in seconds (scaled simulation time).
-        _accels (dict):  Stores computed accelerations before applying them,
-                         so all bodies are updated simultaneously (not sequentially).
+        G: Scaled gravitational constant from config.py.
+        bodies: List of CelestialBody objects registered with the engine.
+        dt: Base time step in simulation seconds.
     """
 
-    # Gravitational constant loaded from config.py (simulation units).
-    # Tuned so circular_orbit_speed() returns ~2 px/s at 200 px with M_sun=1.0
     G = config.G
 
     def __init__(self, dt: float = 0.1):
         """
+        Create an empty physics engine.
+
         Args:
-            dt (float): Simulation time step. Smaller = more accurate, slower.
+            dt: Base simulation time step. Smaller values improve accuracy but
+                require more frames to show visible movement.
         """
         self.bodies: list[CelestialBody] = []
         self.dt = dt
 
-    # ------------------------------------------------------------------
-    # Body management
-    # ------------------------------------------------------------------
-
     def add_body(self, body: CelestialBody):
         """
-        Register a celestial body with the engine.
+        Register a body so it participates in gravity calculations.
 
         Args:
-            body (CelestialBody): The body to add (Star, Planet, Moon, Rocket…)
+            body: CelestialBody instance to add.
         """
         self.bodies.append(body)
 
     def remove_body(self, body: CelestialBody):
         """
-        Remove a body from the simulation (e.g. rocket that flew off screen).
+        Remove a body from the engine if it is currently registered.
 
         Args:
-            body (CelestialBody): The body to remove
+            body: CelestialBody instance to remove.
         """
         if body in self.bodies:
             self.bodies.remove(body)
 
-    # ------------------------------------------------------------------
-    # Core physics step
-    # ------------------------------------------------------------------
-
     def step(self, speed_multiplier: float = 1.0):
         """
-        Advance the entire simulation by one time step.
-
-        Process:
-          1. Compute net gravitational acceleration on every non-Star body
-             from every other body.
-          2. Apply Symplectic Euler integration to update velocities and positions.
-
-        Stars are skipped (they are fixed anchors and do not move).
+        Advance the whole simulation by one scaled time step.
 
         Args:
-            speed_multiplier (float): Scale factor for dt, controlled by the user
-                                      pressing +/- keys. Default 1.0 = real sim speed.
+            speed_multiplier: User-controlled factor applied to dt.
+
+        Stars are skipped during movement because this project treats them as
+        fixed anchors. Planets still receive acceleration from the Sun and from
+        each other. If a moved body owns moons, their local hierarchical orbits
+        are updated after the parent moves.
         """
         dt = self.dt * speed_multiplier
-
-        # --- step 1: compute accelerations for all non-star bodies ---
-        # We collect all accelerations first so every body is updated
-        # using positions from the SAME moment (not a mix of old and new).
         accels = self._compute_all_accelerations()
 
-        # --- step 2: apply Symplectic Euler integration ---
         for body in self.bodies:
             if isinstance(body, Star):
-                continue   # stars are stationary
+                continue
 
             ax, ay = accels.get(id(body), (0.0, 0.0))
 
-            # update velocity first (symplectic step)
             body.velocity[0] += ax * dt
             body.velocity[1] += ay * dt
 
-            # record trail snapshot
             body.trail.append((body.position[0], body.position[1]))
             if len(body.trail) > body.TRAIL_LENGTH:
                 body.trail.pop(0)
 
-            # update position using new velocity
             body.position[0] += body.velocity[0] * dt
             body.position[1] += body.velocity[1] * dt
 
-            # if this body has moons, update them hierarchically
-            if hasattr(body, 'moons'):
+            if hasattr(body, "moons"):
                 body.update(dt)
-
-    # ------------------------------------------------------------------
-    # Acceleration calculation
-    # ------------------------------------------------------------------
 
     def _compute_all_accelerations(self) -> dict:
         """
-        Compute net gravitational acceleration on every body from all others.
+        Compute net acceleration for every registered body.
 
         Returns:
-            dict: { id(body): (ax, ay) } for every non-Star body
-        """
-        accels = {id(b): [0.0, 0.0] for b in self.bodies}
+            Dictionary mapping id(body) to an (ax, ay) acceleration tuple.
 
-        # iterate over every unique pair (i, j) — use list comprehension
+        Every unique body pair is evaluated once. The equal-and-opposite
+        accelerations from that pair are accumulated into each body's total.
+        """
+        accels = {id(body): [0.0, 0.0] for body in self.bodies}
+
         pairs = [
             (self.bodies[i], self.bodies[j])
             for i in range(len(self.bodies))
@@ -149,7 +123,7 @@ class PhysicsEngine:
             accels[id(b2)][0] += ax2
             accels[id(b2)][1] += ay2
 
-        return {k: tuple(v) for k, v in accels.items()}
+        return {key: tuple(value) for key, value in accels.items()}
 
     def _compute_pair_acceleration(
         self,
@@ -157,66 +131,57 @@ class PhysicsEngine:
         b2: CelestialBody,
     ) -> tuple:
         """
-        Compute the mutual gravitational acceleration between two bodies.
-
-        Uses Newton's law:
-            F  = G * m1 * m2 / r²
-            a1 = F / m1  (acceleration on b1 toward b2)
-            a2 = F / m2  (acceleration on b2 toward b1, opposite direction)
-
-        A softening factor ε is added to r² to prevent numerical explosion
-        when two bodies get extremely close (avoids division by near-zero).
+        Compute mutual gravitational acceleration between two bodies.
 
         Args:
-            b1, b2 (CelestialBody): The two bodies interacting
+            b1: First body in the pair.
+            b2: Second body in the pair.
 
         Returns:
-            tuple: (ax1, ay1, ax2, ay2) — accelerations for b1 and b2
+            Tuple (ax1, ay1, ax2, ay2), where the first two values are the
+            acceleration on b1 and the last two values are the acceleration on
+            b2.
+
+        The calculation uses the acceleration form of Newton's law:
+            a_on_1 = G * mass_2 / r_squared
+            a_on_2 = G * mass_1 / r_squared
+
+        A small softening value is added to distance squared so overlapping
+        bodies do not cause division by zero or extreme acceleration spikes.
         """
         dx = b2.position[0] - b1.position[0]
         dy = b2.position[1] - b1.position[1]
 
         r_sq = dx * dx + dy * dy
-
-        # softening factor — only prevents singularity when bodies
-        # overlap completely; tiny value preserves accuracy at normal distances
         epsilon = 1.0
         r_sq_soft = r_sq + epsilon
-
         r = math.sqrt(r_sq_soft)
 
-        # gravitational acceleration magnitude for each body
-        # a1 = G * m2 / r²,  a2 = G * m1 / r²
         a1_mag = self.G * b2.mass / r_sq_soft
         a2_mag = self.G * b1.mass / r_sq_soft
 
-        # unit vector from b1 → b2
         ux = dx / r
         uy = dy / r
 
-        # b1 accelerates toward b2, b2 accelerates toward b1 (opposite)
-        ax1, ay1 =  a1_mag * ux,  a1_mag * uy
+        ax1, ay1 = a1_mag * ux, a1_mag * uy
         ax2, ay2 = -a2_mag * ux, -a2_mag * uy
 
         return ax1, ay1, ax2, ay2
 
-    # ------------------------------------------------------------------
-    # Helpers used by SolarSystem to set up initial circular orbits
-    # ------------------------------------------------------------------
-
     def circular_orbit_speed(self, central_mass: float, orbital_radius: float) -> float:
         """
-        Compute the tangential speed needed for a perfectly circular orbit.
-
-        Formula derived from balancing gravitational force and centripetal force:
-            G * M * m / r² = m * v² / r
-            →  v = sqrt(G * M / r)
+        Compute the tangential speed for a circular orbit.
 
         Args:
-            central_mass   (float): Mass of the body being orbited (e.g. the Sun)
-            orbital_radius (float): Distance between the two bodies in pixels
+            central_mass: Mass of the body being orbited.
+            orbital_radius: Distance from the central body.
 
         Returns:
-            float: Speed in pixels/second for a circular orbit
+            Speed in pixels per second.
+
+        The formula comes from balancing gravity with centripetal acceleration:
+            G * central_mass / radius_squared = speed_squared / radius
+        which reduces to:
+            speed = sqrt(G * central_mass / radius)
         """
         return math.sqrt(self.G * central_mass / orbital_radius)

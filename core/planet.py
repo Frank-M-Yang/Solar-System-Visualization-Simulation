@@ -1,24 +1,26 @@
 """
 planet.py
-Represents a planet orbiting the star.
-Inherits physical movement from CelestialBody; adds orbital data and a moon list.
+
+Defines planets that move under the global gravity engine and own local moons.
 """
 
 import pygame
+
 from core.celestial_body import CelestialBody
 
 
 class Planet(CelestialBody):
     """
-    A planet that orbits a star under gravitational force.
+    Planet orbiting the Sun under Newtonian gravity.
 
-    Inherits from CelestialBody:
-        mass, radius, color, velocity, position, trail, update(), draw()
+    The planet's translational motion is updated by PhysicsEngine. The planet
+    class adds initial orbital metadata and a list of moons. Moons are updated
+    in a local frame after the planet has moved.
 
-    Extra attributes:
-        orbital_radius (float): Distance from the star in pixels (used for setup)
-        orbital_speed  (float): Initial tangential speed in pixels/second
-        moons          (list):  List of Moon objects orbiting this planet
+    Attributes:
+        orbital_radius: Initial distance from the Sun in pixels.
+        orbital_speed: Initial tangential speed in pixels per second.
+        moons: Moon objects attached to this planet.
     """
 
     def __init__(
@@ -33,47 +35,63 @@ class Planet(CelestialBody):
         x: float = 0.0,
         y: float = 0.0,
     ):
-        # Initial velocity is tangential (upward = negative y) for a clockwise orbit
+        """
+        Create a planet with tangential starting velocity.
+
+        Args:
+            name: Display label.
+            description: Short English description.
+            mass: Relative simulation mass.
+            radius: Drawn radius in pixels.
+            color: RGB draw color.
+            orbital_radius: Initial distance from the Sun.
+            orbital_speed: Initial tangential speed.
+            x: Initial x coordinate.
+            y: Initial y coordinate.
+        """
         super().__init__(
-            name, description, mass, radius, color,
-            x, y,
-            vx=0.0, vy=-orbital_speed,   # tangential velocity at start
+            name,
+            description,
+            mass,
+            radius,
+            color,
+            x,
+            y,
+            vx=0.0,
+            vy=-orbital_speed,
         )
         self.orbital_radius = orbital_radius
-        self.orbital_speed  = orbital_speed
-        self.moons          = []           # populated later by SolarSystem
+        self.orbital_speed = orbital_speed
+        self.moons = []
 
     def add_moon(self, moon):
         """
-        Register a Moon as orbiting this planet.
+        Attach a moon to this planet.
 
         Args:
-            moon (Moon): The moon object to attach
+            moon: Moon instance that should follow this planet.
         """
         self.moons.append(moon)
 
     def update(self, dt: float, ax: float = 0.0, ay: float = 0.0):
         """
-        Update the planet's position via PhysicsEngine (handled externally),
-        then update all attached moons using hierarchical orbits.
+        Update moons after the physics engine moves the planet.
 
-        Note: PhysicsEngine calls this indirectly by modifying velocity/position
-        directly. We override here only to cascade the update to moons.
+        Args:
+            dt: Time step in simulation seconds.
+            ax: Ignored here because planet acceleration is handled externally.
+            ay: Ignored here because planet acceleration is handled externally.
         """
-        # moons update their angle relative to this planet's current position
         for moon in self.moons:
             moon.update(dt)
 
     def draw(self, screen: pygame.Surface):
         """
-        Draw the planet, its trail, its label, and all its moons.
+        Draw the planet and then draw all attached moons.
 
         Args:
-            screen (pygame.Surface): The active display surface
+            screen: Active pygame surface.
         """
-        # draw planet + trail via parent
         super().draw(screen)
-
-        # draw each moon
         for moon in self.moons:
             moon.draw(screen)

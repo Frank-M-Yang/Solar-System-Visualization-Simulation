@@ -1,23 +1,18 @@
 """
 main.py
-Entry point — run with:  python main.py
 
-Solar System Simulator
-======================
-A real-time simulation of the solar system using Newtonian gravity.
-All orbits emerge naturally from physics — no hardcoded ellipses.
+Application entry point for the Solar System Simulator.
 
-Controls:
-    + / -   Speed up / slow down
-    R       Launch Qian Xuesen's lunar rocket (easter egg)
-    ESC     Quit
+Run from the project root with:
+    python main.py
 
-Inspired by NASA's Artemis II mission (April 2026) and
-Qian Xuesen's legendary exam problem for his aerospace students.
+The main function creates a Simulation object and delegates all runtime work
+to that object. Keeping this file small makes startup easy to understand and
+keeps pygame-specific logic inside the simulation package.
 """
 
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
 
@@ -25,6 +20,13 @@ from simulation.simulation import Simulation
 
 
 def main():
+    """
+    Create and run the top-level simulation controller.
+
+    The Simulation class owns pygame initialization, the event loop, rendering,
+    physics updates, and the Qian Xuesen easter egg launcher. This function is
+    intentionally thin so the command-line entry point has no hidden state.
+    """
     sim = Simulation()
     sim.run()
 

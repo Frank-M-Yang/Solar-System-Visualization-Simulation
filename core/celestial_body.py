@@ -1,26 +1,36 @@
 """
 celestial_body.py
-Abstract-style base class for all celestial bodies (Star, Planet, Moon).
-Inherits position from GameObject; adds mass, radius, velocity, color, and trail.
+
+Defines the common physical and visual behavior for stars, planets, moons,
+dwarf planets, and rockets.
+
+CelestialBody extends GameObject with mass, radius, velocity, color, and an
+orbit trail. Subclasses can override update or draw when they need specialized
+behavior, but the base implementation covers the common case.
 """
 
 import pygame
+
 from core.game_object import GameObject
 
 
 class CelestialBody(GameObject):
     """
-    Represents any physical body in the solar system.
+    Physical object that can move and be drawn on a pygame surface.
 
-    Extends GameObject with:
-        mass     (float): Mass in kg — drives gravitational calculations
-        radius   (float): Visual radius in pixels
-        velocity (list):  [vx, vy] velocity vector, pixels per second
-        color    (tuple): RGB color used for rendering
-        trail    (list):  Recent past positions, used to draw orbit trail
+    The class uses symplectic Euler style updates: velocity changes first from
+    acceleration, then position changes from the new velocity. This is simple
+    and stable enough for the scaled educational simulation.
+
+    Attributes:
+        mass: Relative mass used by the gravity engine.
+        radius: Visual radius in pixels.
+        color: RGB tuple used for drawing the object and trail.
+        velocity: Two-item list containing x and y velocity.
+        trail: Recent position snapshots used to render orbit history.
     """
 
-    TRAIL_LENGTH = 150  # number of past positions kept for the orbit trail
+    TRAIL_LENGTH = 150
 
     def __init__(
         self,
@@ -34,58 +44,67 @@ class CelestialBody(GameObject):
         vx: float = 0.0,
         vy: float = 0.0,
     ):
-        super().__init__(name, description, x, y)
-        self.mass     = mass
-        self.radius   = radius
-        self.color    = color
-        self.velocity = [vx, vy]
-        self.trail    = []          # list of (x, y) snapshots
+        """
+        Create a body with physical properties and initial motion.
 
-    # ------------------------------------------------------------------
-    # Physics
-    # ------------------------------------------------------------------
+        Args:
+            name: Display label for the object.
+            description: Short English description.
+            mass: Relative simulation mass.
+            radius: Drawn radius in pixels.
+            color: RGB draw color.
+            x: Initial x coordinate.
+            y: Initial y coordinate.
+            vx: Initial x velocity.
+            vy: Initial y velocity.
+        """
+        super().__init__(name, description, x, y)
+        self.mass = mass
+        self.radius = radius
+        self.color = color
+        self.velocity = [vx, vy]
+        self.trail = []
 
     def update(self, dt: float, ax: float = 0.0, ay: float = 0.0):
         """
-        Advance the body by one time step using Euler integration.
+        Advance this body by one time step.
 
         Args:
-            dt (float): Time step in seconds
-            ax (float): Net gravitational acceleration in x  (pixels/s²)
-            ay (float): Net gravitational acceleration in y  (pixels/s²)
+            dt: Time step in simulation seconds.
+            ax: Net x acceleration applied during this step.
+            ay: Net y acceleration applied during this step.
+
+        The current position is recorded before motion so trails show where the
+        body has been. Old trail points are trimmed to a fixed length to avoid
+        unbounded memory growth.
         """
-        # 1. update velocity from acceleration
         self.velocity[0] += ax * dt
         self.velocity[1] += ay * dt
 
-        # 2. record current position for trail before moving
         self.trail.append((self.position[0], self.position[1]))
         if len(self.trail) > self.TRAIL_LENGTH:
             self.trail.pop(0)
 
-        # 3. update position from velocity
         self.position[0] += self.velocity[0] * dt
         self.position[1] += self.velocity[1] * dt
 
-    # ------------------------------------------------------------------
-    # Rendering
-    # ------------------------------------------------------------------
-
     def draw(self, screen: pygame.Surface):
         """
-        Draw the orbit trail and the body itself onto the pygame surface.
+        Draw the orbit trail, body disk, and name label.
 
         Args:
-            screen (pygame.Surface): The active display surface
+            screen: Active pygame surface.
+
+        Trail points fade from dim to brighter as they approach the current
+        position. The body itself is drawn as a filled circle with a small label
+        placed to the right.
         """
-        # --- draw trail (older points are dimmer) ---
         for i, (tx, ty) in enumerate(self.trail):
-            brightness = i / self.TRAIL_LENGTH          # 0.0 → 1.0
+            brightness = i / self.TRAIL_LENGTH
             trail_color = tuple(int(c * brightness * 0.5) for c in self.color)
             if 0 <= int(tx) < screen.get_width() and 0 <= int(ty) < screen.get_height():
                 pygame.draw.circle(screen, trail_color, (int(tx), int(ty)), 1)
 
-        # --- draw main body ---
         pygame.draw.circle(
             screen,
             self.color,
@@ -93,11 +112,12 @@ class CelestialBody(GameObject):
             max(int(self.radius), 2),
         )
 
-        # --- draw name label ---
-        font  = pygame.font.SysFont("Arial", 11)
+        font = pygame.font.SysFont("Arial", 11)
         label = font.render(self.name, True, (200, 200, 200))
         screen.blit(
             label,
-            (int(self.position[0]) + int(self.radius) + 3,
-             int(self.position[1]) - 6),
+            (
+                int(self.position[0]) + int(self.radius) + 3,
+                int(self.position[1]) - 6,
+            ),
         )

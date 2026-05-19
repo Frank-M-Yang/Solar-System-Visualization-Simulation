@@ -1,7 +1,10 @@
-# core/__init__.py
-# Makes 'core' a Python package and exposes the main classes cleanly.
+"""
+core package
 
-from core.game_object    import GameObject
+Exports the primary object classes used by the simulator.
+"""
+
 from core.celestial_body import CelestialBody
-from core.star           import Star
-from core.planet         import Planet
+from core.game_object import GameObject
+from core.planet import Planet
+from core.star import Star

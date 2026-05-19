@@ -1,190 +1,215 @@
 """
 solar_system.py
-World manager — builds all celestial bodies from config.py
-and registers them with the PhysicsEngine.
+
+Builds and owns the simulated solar system.
+
+SolarSystem translates static data from config.py into live Star, Planet, Moon,
+and DwarfPlanet objects. It also owns the PhysicsEngine used by the main
+simulation loop.
 """
 
 import config
-from core.star             import Star
-from core.planet           import Planet
-from core.moon             import Moon
-from core.dwarf_planet     import DwarfPlanet
+from core.dwarf_planet import DwarfPlanet
+from core.moon import Moon
+from core.planet import Planet
+from core.star import Star
 from engine.physics_engine import PhysicsEngine
 
 
 class SolarSystem:
     """
-    Constructs and owns all celestial bodies in the simulation.
+    Container for all celestial bodies and the physics engine.
 
     Attributes:
-        engine  (PhysicsEngine): Shared physics engine
-        star    (Star)         : The Sun
-        planets (list)         : All 8 planets
-        pluto   (DwarfPlanet)  : Pluto
-        moons   (list)         : All moons across all planets
-        earth   (Planet)       : Quick reference to Earth (for easter egg)
-        moon    (Moon)         : Quick reference to Earth's Moon
+        engine: Shared PhysicsEngine instance.
+        star: The Sun object.
+        planets: List of eight Planet objects.
+        pluto: DwarfPlanet object for Pluto.
+        moons: Flat list of all Moon objects.
+        earth: Convenience reference to Earth.
+        moon: Convenience reference to Earth's Moon.
     """
 
     def __init__(self):
-        self.engine  = PhysicsEngine(dt=config.DT)
-        self.star    = None
+        """
+        Create an empty world and immediately populate it from config data.
+        """
+        self.engine = PhysicsEngine(dt=config.DT)
+        self.star = None
         self.planets = []
-        self.pluto   = None
-        self.moons   = []
-        self.earth   = None
-        self.moon    = None
+        self.pluto = None
+        self.moons = []
+        self.earth = None
+        self.moon = None
         self._build()
 
-    # ------------------------------------------------------------------
-    # Construction
-    # ------------------------------------------------------------------
-
     def _build(self):
-        """Instantiate every body from config and register with the engine."""
+        """
+        Instantiate every configured body and register physics participants.
 
-        # Sun
+        The Sun, planets, and Pluto are registered with the global engine. Moons
+        are attached to their parent planets but are not registered globally
+        because they use local hierarchical orbit logic.
+        """
         self.star = Star(
-            **{k: v for k, v in config.SUN_DATA.items()},
+            **{key: value for key, value in config.SUN_DATA.items()},
             x=float(config.CX),
             y=float(config.CY),
         )
         self.engine.add_body(self.star)
 
-        # Planets
-        for pd in config.PLANET_DATA:
-            v = (self.engine.circular_orbit_speed(self.star.mass, pd["orbital_radius"])
-                 * pd["speed_factor"])
+        for planet_data in config.PLANET_DATA:
+            orbital_speed = (
+                self.engine.circular_orbit_speed(
+                    self.star.mass,
+                    planet_data["orbital_radius"],
+                )
+                * planet_data["speed_factor"]
+            )
 
             planet = Planet(
-                name           = pd["name"],
-                description    = pd["description"],
-                mass           = pd["mass"],
-                radius         = pd["radius"],
-                color          = pd["color"],
-                orbital_radius = pd["orbital_radius"],
-                orbital_speed  = v,
-                x              = float(config.CX + pd["orbital_radius"]),
-                y              = float(config.CY),
+                name=planet_data["name"],
+                description=planet_data["description"],
+                mass=planet_data["mass"],
+                radius=planet_data["radius"],
+                color=planet_data["color"],
+                orbital_radius=planet_data["orbital_radius"],
+                orbital_speed=orbital_speed,
+                x=float(config.CX + planet_data["orbital_radius"]),
+                y=float(config.CY),
             )
             self.planets.append(planet)
             self.engine.add_body(planet)
 
-            if pd["name"] == "Earth":
+            if planet.name == "Earth":
                 self.earth = planet
 
-        # Moons — filter() finds planets that have moon entries in config
-        for planet in filter(lambda p: p.name in config.MOON_DATA, self.planets):
-            for md in config.MOON_DATA[planet.name]:
-                mv = (self.engine.circular_orbit_speed(planet.mass, md["orbital_radius"])
-                      * md["speed_factor"])
+        for planet in filter(lambda item: item.name in config.MOON_DATA, self.planets):
+            for moon_data in config.MOON_DATA[planet.name]:
+                moon_speed = (
+                    self.engine.circular_orbit_speed(
+                        planet.mass,
+                        moon_data["orbital_radius"],
+                    )
+                    * moon_data["speed_factor"]
+                )
 
                 moon = Moon(
-                    name           = md["name"],
-                    description    = md["description"],
-                    mass           = md["mass"],
-                    radius         = md["radius"],
-                    color          = md["color"],
-                    parent         = planet,
-                    orbital_radius = md["orbital_radius"],
-                    orbital_speed  = mv,
+                    name=moon_data["name"],
+                    description=moon_data["description"],
+                    mass=moon_data["mass"],
+                    radius=moon_data["radius"],
+                    color=moon_data["color"],
+                    parent=planet,
+                    orbital_radius=moon_data["orbital_radius"],
+                    orbital_speed=moon_speed,
                 )
                 planet.add_moon(moon)
                 self.moons.append(moon)
-                # Moons use hierarchical orbits — NOT registered with PhysicsEngine
-                # They are updated by Planet.update() each frame instead
 
-                if planet.name == "Earth" and md["name"] == "Moon":
+                if planet.name == "Earth" and moon.name == "Moon":
                     self.moon = moon
 
-        # Pluto (Dwarf Planet)
-        dd = config.DWARF_PLANET_DATA
-        dv = (self.engine.circular_orbit_speed(self.star.mass, dd["orbital_radius"])
-              * dd["speed_factor"])
+        dwarf_data = config.DWARF_PLANET_DATA
+        dwarf_speed = (
+            self.engine.circular_orbit_speed(
+                self.star.mass,
+                dwarf_data["orbital_radius"],
+            )
+            * dwarf_data["speed_factor"]
+        )
 
         self.pluto = DwarfPlanet(
-            name           = dd["name"],
-            description    = dd["description"],
-            mass           = dd["mass"],
-            radius         = dd["radius"],
-            color          = dd["color"],
-            orbital_radius = dd["orbital_radius"],
-            orbital_speed  = dv,
-            classification = dd["classification"],
-            x              = float(config.CX + dd["orbital_radius"]),
-            y              = float(config.CY),
+            name=dwarf_data["name"],
+            description=dwarf_data["description"],
+            mass=dwarf_data["mass"],
+            radius=dwarf_data["radius"],
+            color=dwarf_data["color"],
+            orbital_radius=dwarf_data["orbital_radius"],
+            orbital_speed=dwarf_speed,
+            classification=dwarf_data["classification"],
+            x=float(config.CX + dwarf_data["orbital_radius"]),
+            y=float(config.CY),
         )
         self.engine.add_body(self.pluto)
 
-    # ------------------------------------------------------------------
-    # Per-frame update and draw
-    # ------------------------------------------------------------------
-
     def update(self, speed_multiplier: float = 1.0):
-        """Step the physics engine forward."""
+        """
+        Advance all global physics bodies by one frame.
+
+        Args:
+            speed_multiplier: User-controlled time scaling factor.
+        """
         self.engine.step(speed_multiplier)
 
     def draw(self, screen, zoom: float = 1.0):
         """
-        Draw all bodies with camera zoom applied.
-        Physics positions are unchanged — only the visual transform differs.
+        Draw the world using a camera transform centered on the Sun.
 
         Args:
-            screen (pygame.Surface): Display surface
-            zoom   (float): Scale factor; <1.0 zooms out, >1.0 zooms in
+            screen: Active pygame surface.
+            zoom: Visual scale factor. Values below 1.0 zoom out, values above
+                1.0 zoom in.
+
+        The physics coordinates are not permanently changed. Each body is
+        temporarily transformed into screen space, drawn, and then restored.
         """
-        cx = screen.get_width()  // 2
+        cx = screen.get_width() // 2
         cy = screen.get_height() // 2
         sx = self.star.position[0]
         sy = self.star.position[1]
 
-        def apply(body):
-            """Temporarily transform body position/radius/trail for drawing."""
-            ox, oy = body.position[0], body.position[1]
-            or_    = body.radius
-            otrail = body.trail[:]
-            body.position[0] = (ox - sx) * zoom + cx
-            body.position[1] = (oy - sy) * zoom + cy
-            body.radius       = max(or_ * zoom, 1.5)
-            body.trail        = [((tx - sx) * zoom + cx,
-                                  (ty - sy) * zoom + cy)
-                                 for tx, ty in otrail]
-            return ox, oy, or_, otrail
+        def apply_camera(body):
+            """
+            Temporarily convert one body's position, radius, and trail.
 
-        def restore(body, ox, oy, or_, otrail):
-            """Restore original physics values after drawing."""
-            body.position[0] = ox
-            body.position[1] = oy
-            body.radius       = or_
-            body.trail        = otrail
+            Returns:
+                Tuple containing original position, radius, and trail data.
+            """
+            original_x, original_y = body.position[0], body.position[1]
+            original_radius = body.radius
+            original_trail = body.trail[:]
 
-        # star
-        saved = apply(self.star)
+            body.position[0] = (original_x - sx) * zoom + cx
+            body.position[1] = (original_y - sy) * zoom + cy
+            body.radius = max(original_radius * zoom, 1.5)
+            body.trail = [
+                ((tx - sx) * zoom + cx, (ty - sy) * zoom + cy)
+                for tx, ty in original_trail
+            ]
+            return original_x, original_y, original_radius, original_trail
+
+        def restore_body(body, original_x, original_y, original_radius, original_trail):
+            """
+            Restore one body after temporary camera-space drawing.
+            """
+            body.position[0] = original_x
+            body.position[1] = original_y
+            body.radius = original_radius
+            body.trail = original_trail
+
+        saved = apply_camera(self.star)
         self.star.draw(screen)
-        restore(self.star, *saved)
+        restore_body(self.star, *saved)
 
-        # planets + their moons
         for planet in self.planets:
-            p_saved = apply(planet)
-            m_saved = [apply(m) for m in planet.moons]
+            planet_saved = apply_camera(planet)
+            moon_saved = [apply_camera(moon) for moon in planet.moons]
             planet.draw(screen)
-            restore(planet, *p_saved)
-            for moon, ms in zip(planet.moons, m_saved):
-                restore(moon, *ms)
+            restore_body(planet, *planet_saved)
+            for moon, saved_state in zip(planet.moons, moon_saved):
+                restore_body(moon, *saved_state)
 
-        # pluto
-        saved = apply(self.pluto)
+        saved = apply_camera(self.pluto)
         self.pluto.draw(screen)
-        restore(self.pluto, *saved)
-
-    # ------------------------------------------------------------------
-    # Utility
-    # ------------------------------------------------------------------
+        restore_body(self.pluto, *saved)
 
     def all_bodies(self):
         """
-        Flat list of every celestial body in the simulation.
-        Uses list comprehension to flatten each planet's moon list.
+        Return a flat list of all bodies owned by the solar system.
+
+        Returns:
+            List containing the Sun, planets, moons, and Pluto.
         """
         all_moons = [moon for planet in self.planets for moon in planet.moons]
         return [self.star] + self.planets + all_moons + [self.pluto]

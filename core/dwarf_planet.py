@@ -1,21 +1,24 @@
 """
 dwarf_planet.py
-Represents a dwarf planet (e.g. Pluto).
-Inherits everything from Planet; adds a classification label
-and a dotted trail to visually distinguish it from full planets.
+
+Defines dwarf planets, currently used for Pluto.
 """
 
 import pygame
+
 from core.planet import Planet
 
 
 class DwarfPlanet(Planet):
     """
-    A dwarf planet orbiting the Sun.
-    Inherits orbital physics from Planet.
+    Planet-like body with an additional classification label.
 
-    Extra attribute:
-        classification (str): Always "Dwarf Planet", shown in the label
+    DwarfPlanet inherits orbital setup and moon support from Planet. Its draw
+    method is specialized so the trail is dotted and the label includes the
+    classification string.
+
+    Attributes:
+        classification: Text label such as "Dwarf Planet".
     """
 
     def __init__(
@@ -31,27 +34,49 @@ class DwarfPlanet(Planet):
         x: float = 0.0,
         y: float = 0.0,
     ):
+        """
+        Create a dwarf planet with normal planet orbital properties.
+
+        Args:
+            name: Display label.
+            description: Short English description.
+            mass: Relative simulation mass.
+            radius: Drawn radius in pixels.
+            color: RGB draw color.
+            orbital_radius: Initial distance from the Sun.
+            orbital_speed: Initial tangential speed.
+            classification: Label appended to the rendered name.
+            x: Initial x coordinate.
+            y: Initial y coordinate.
+        """
         super().__init__(
-            name, description, mass, radius, color,
-            orbital_radius, orbital_speed, x, y,
+            name,
+            description,
+            mass,
+            radius,
+            color,
+            orbital_radius,
+            orbital_speed,
+            x,
+            y,
         )
         self.classification = classification
 
     def draw(self, screen: pygame.Surface):
         """
-        Draw with a dotted trail (every other point skipped)
-        to distinguish from regular planets visually.
+        Draw a dotted trail, body disk, and classification label.
+
+        Args:
+            screen: Active pygame surface.
         """
-        # dotted trail — skip every 2nd point
         for i, (tx, ty) in enumerate(self.trail):
             if i % 2 != 0:
                 continue
-            brightness  = i / max(len(self.trail), 1)
+            brightness = i / max(len(self.trail), 1)
             trail_color = tuple(int(c * brightness * 0.4) for c in self.color)
             if 0 <= int(tx) < screen.get_width() and 0 <= int(ty) < screen.get_height():
                 pygame.draw.circle(screen, trail_color, (int(tx), int(ty)), 1)
 
-        # main body
         pygame.draw.circle(
             screen,
             self.color,
@@ -59,11 +84,12 @@ class DwarfPlanet(Planet):
             max(int(self.radius), 2),
         )
 
-        # label includes classification
-        font  = pygame.font.SysFont("Arial", 10)
+        font = pygame.font.SysFont("Arial", 10)
         label = font.render(f"{self.name} ({self.classification})", True, (180, 160, 160))
         screen.blit(
             label,
-            (int(self.position[0]) + int(self.radius) + 3,
-             int(self.position[1]) - 6),
+            (
+                int(self.position[0]) + int(self.radius) + 3,
+                int(self.position[1]) - 6,
+            ),
         )
