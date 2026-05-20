@@ -1,0 +1,143 @@
+\ProvidesPackage{vub}
+\RequirePackage{color}
+\RequirePackage{tikz}
+\RequirePackage{adjustbox}
+% Additionally, we use `geometry` to play with margins on the title page
+\RequirePackage{geometry}
+%\RequirePackage[T1]{fontenc}
+
+\RequirePackage{kvoptions}
+\DeclareBoolOption[false]{spotcolors}
+\DeclareComplementaryOption{nospotcolors}{spotcolors}
+\ProcessKeyvalOptions*{}
+
+\ifvub@spotcolors
+\RequirePackage[spotcolors]{vubprivate}
+\else
+\RequirePackage{vubprivate}
+\fi
+
+\newcommand\@faculty{Set a faculty using \textbackslash faculty\{\textit{Engineering Sciences}\}}
+\newcommand\@subtitle{}
+
+\newcommand\pretitle[1]{%
+  \makeatletter%
+  \@ifundefined{@pretitle}{%
+  \newcommand\@pretitle{#1}%
+  }{%
+  \renewcommand\@pretitle{#1}%
+  }%
+  \makeatother%
+}
+
+\newcommand\promotors[1]{%
+  \makeatletter%
+  \@ifundefined{@promotors}{%
+  \newcommand\@promotors{#1}%
+  }{%
+  \renewcommand\@promotors{#1}%
+  }%
+  \makeatother%
+}
+
+\@ifundefined{faculty}{%
+    \newcommand{\faculty}[1]{%
+        \makeatletter%
+        \renewcommand\@faculty{#1}%
+        \makeatother%
+    }%
+}
+
+\@ifundefined{subtitle}{%
+    \newcommand{\subtitle}[1]{%
+        \makeatletter%
+        \renewcommand\@subtitle{#1}%
+        \makeatother%
+    }%
+}
+
+\renewcommand\and{\hskip 1em}
+\renewcommand\maketitle{
+\begingroup
+\newgeometry{left=14mm,top=16mm,right=14mm,bottom=18mm}
+\begin{titlepage}
+    % Avoid duplicate "page.1" anchors when hyperref is enabled.
+    \ifcsname hypersetup\endcsname
+      \hypersetup{pageanchor=false}
+    \fi
+    \noindent\makebox[\textwidth]{%
+      \raisebox{\dimexpr \triangleH-\height\relax}{\includegraphics[width=5.66cm]{vub_logo_cmyk}}%
+      \hfill%
+      \vubtriangle
+    }%
+
+    \vfill
+
+    \begin{center}
+      \begin{minipage}{0.95\textwidth}
+        \centering
+        \ifdefined\@pretitle%
+          {\vubfont{\large\color{vuboranje}\@pretitle\par}}
+          \vspace{4mm}
+        \fi
+
+        % Centered title with a simple "shrink-to-fit" heuristic for long titles.
+        % We don't force any casing; control capitalization in \title{...}.
+        \begingroup
+          \emergencystretch=4em\relax
+          \def\vub@title@box##1##2{%
+            \setbox0=\vbox{\hsize=\linewidth\centering
+              {\color{vubbleu}\vubfontbf{\fontsize{##1}{##2}\selectfont\@title\par}}%
+            }%
+          }%
+          % Try a few sizes until the title doesn't get excessively tall.
+          \vub@title@box{24pt}{29pt}%
+          \ifdim\ht0>65mm
+            \vub@title@box{21pt}{25pt}%
+            \ifdim\ht0>65mm
+              \vub@title@box{18pt}{22pt}%
+            \fi
+          \fi
+          \box0
+        \endgroup
+
+        \vspace{5mm}
+
+        {\color{vubbleu}\vubfont{\Large\@subtitle\par}}
+
+        \vspace{26mm}
+
+        {\color{vuboranje}\vubfont{\Large\@author\par}}
+
+        \vspace{6mm}
+
+        {\color{vubbleu}\vubfont{\large\@date\par}}
+      \end{minipage}
+    \end{center}
+
+    \vfill
+
+    \begin{center}
+      \begin{minipage}{0.92\textwidth}
+        \ifdefined\@promotors%
+          \begin{flushleft}
+            \vubfont{\color{vuboranje}\@promotors}
+          \end{flushleft}
+
+            \vspace{2mm}
+        \fi
+
+        {\color{vubbleu}\vubfontbf{\fontsize{14pt}{16pt}\selectfont \@faculty}}
+      \end{minipage}
+    \end{center}
+\end{titlepage}
+    \ifcsname hypersetup\endcsname
+      \hypersetup{pageanchor=true}
+    \fi
+\restoregeometry
+% Reset any leaked font/color state from the title page before returning to the document.
+\normalfont\normalcolor
+\endgroup
+}
+
+\endinput
